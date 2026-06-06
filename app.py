@@ -2,16 +2,16 @@ import streamlit as st
 from supabase import create_client
 import pandas as pd
 
-# 1. Configuración de conexión (Usando Secrets de Streamlit)
-# Asegúrate de cargar tus credenciales en los 'Settings > Secrets' de tu app en Streamlit Cloud
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+# 1. Configuración de conexión (Lee de los Secrets de Streamlit Cloud)
+# Asegúrate de tener SUPABASE_URL y SUPABASE_KEY en los Settings de tu App
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = create_client(url, key)
 
-st.set_page_config(page_title="Catálogo de Juegos Pro", layout="wide")
+st.set_page_config(page_title="Catálogo de Juegos", layout="wide")
 
-# 2. Lógica de Autenticación
+# 2. Función de Auth (Adaptada para Supabase)
 def show_auth():
     st.sidebar.title("👤 Acceso")
     if 'user' not in st.session_state:
@@ -31,7 +31,7 @@ def show_auth():
             except Exception as e:
                 st.sidebar.error(f"Error: {e}")
     else:
-        st.sidebar.write(f"Logueado como: {st.session_state['user'].email}")
+        st.sidebar.write(f"Logueado: {st.session_state['user'].email}")
         if st.sidebar.button("Cerrar sesión"):
             supabase.auth.sign_out()
             del st.session_state['user']
@@ -40,51 +40,44 @@ def show_auth():
 show_auth()
 
 # 3. Interfaz Principal
-st.title("🎮 Catálogo de Juegos Pro")
+st.title("🎮 Catálogo de Juegos")
 
 if 'user' not in st.session_state:
-    st.info("Inicia sesión en la barra lateral para registrar juegos.")
+    st.info("Inicia sesión en la barra lateral.")
 else:
-    # Formulario para registrar datos
+    # Formulario para registrar datos en Supabase
     with st.form("agregar_juego"):
-        st.subheader("Registrar nuevo juego")
         nombre = st.text_input("Nombre del Juego")
         consola = st.selectbox("Consola", ["PS5", "Xbox", "Switch", "PC"])
         precio = st.number_input("Precio", min_value=0.0)
         url_img = st.text_input("URL de la imagen")
         
-        if st.form_submit_button("Guardar Juego"):
+        if st.form_submit_button("Guardar"):
             data = {
                 "nombre_juego": nombre,
                 "consola": consola,
-                "precio": precio,
+                "precio": float(precio),
                 "imagen_url": url_img,
                 "registrado_por": st.session_state['user'].email
             }
+            # ESTA ES LA FORMA CORRECTA PARA SUPABASE
             supabase.table("catalogo_juegos").insert(data).execute()
             st.success("Juego guardado!")
 
-    # Área de Análisis
+    # Área de análisis (Gráficos y tablas)
     st.divider()
-    st.subheader("📊 Área de Análisis")
-    
-    # Botón para actualizar manualmente los datos del job de Databricks
     if st.button("Actualizar Análisis"):
         st.cache_data.clear()
 
     @st.cache_data
     def get_data():
+        # ESTA ES LA FORMA CORRECTA PARA SUPABASE
         response = supabase.table("catalogo_juegos").select("*").execute()
         return pd.DataFrame(response.data)
 
     df = get_data()
+    st.write(f"Última actualización: {pd.Timestamp.now()}")
     
     if not df.empty:
-        st.write(f"**Última actualización:** {pd.Timestamp.now()}")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.dataframe(df)
-        with col2:
-            st.line_chart(df.set_index('nombre_juego')['precio'])
-    else:
-        st.write("No hay juegos registrados.")
+        st.dataframe(df)
+        st.line_chart(df.set_index('nombre_juego')['precio'])

@@ -2,8 +2,8 @@ import streamlit as st
 from supabase import create_client
 import pandas as pd
 
-# 1. Configuración de conexión (Lee de los Secrets de Streamlit Cloud)
-# Asegúrate de tener SUPABASE_URL y SUPABASE_KEY en los Settings de tu App
+# 1. Configuración de conexión
+# Asegúrate de haber guardado SUPABASE_URL y SUPABASE_KEY en los Secrets de Streamlit Cloud
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 
@@ -11,7 +11,7 @@ supabase = create_client(url, key)
 
 st.set_page_config(page_title="Catálogo de Juegos", layout="wide")
 
-# 2. Función de Auth (Adaptada para Supabase)
+# 2. Función de Autenticación
 def show_auth():
     st.sidebar.title("👤 Acceso")
     if 'user' not in st.session_state:
@@ -43,16 +43,15 @@ show_auth()
 st.title("🎮 Catálogo de Juegos")
 
 if 'user' not in st.session_state:
-    st.info("Inicia sesión en la barra lateral.")
+    st.info("Inicia sesión en la barra lateral para registrar juegos.")
 else:
-    # Formulario para registrar datos en Supabase
     with st.form("agregar_juego"):
         nombre = st.text_input("Nombre del Juego")
         consola = st.selectbox("Consola", ["PS5", "Xbox", "Switch", "PC"])
         precio = st.number_input("Precio", min_value=0.0)
         url_img = st.text_input("URL de la imagen")
         
-        if st.form_submit_button("Guardar"):
+        if st.form_submit_button("Guardar Juego"):
             data = {
                 "nombre_juego": nombre,
                 "consola": consola,
@@ -60,24 +59,35 @@ else:
                 "imagen_url": url_img,
                 "registrado_por": st.session_state['user'].email
             }
-            # ESTA ES LA FORMA CORRECTA PARA SUPABASE
-            supabase.table("catalogo_juegos").insert(data).execute()
-            st.success("Juego guardado!")
+            try:
+                # Intento de inserción
+                supabase.table("catalogo_juegos").insert(data).execute()
+                st.success("Juego guardado correctamente!")
+            except Exception as e:
+                # Si esto falla, aquí verás el error real en pantalla
+                st.error(f"Error al guardar: {e}")
 
-    # Área de análisis (Gráficos y tablas)
+    # Área de análisis
     st.divider()
+    st.subheader("📊 Área de Análisis")
+    
     if st.button("Actualizar Análisis"):
         st.cache_data.clear()
 
     @st.cache_data
     def get_data():
-        # ESTA ES LA FORMA CORRECTA PARA SUPABASE
+        # Consultamos los datos
         response = supabase.table("catalogo_juegos").select("*").execute()
         return pd.DataFrame(response.data)
 
-    df = get_data()
-    st.write(f"Última actualización: {pd.Timestamp.now()}")
-    
-    if not df.empty:
-        st.dataframe(df)
-        st.line_chart(df.set_index('nombre_juego')['precio'])
+    try:
+        df = get_data()
+        st.write(f"Última actualización: {pd.Timestamp.now()}")
+        
+        if not df.empty:
+            st.dataframe(df)
+            st.line_chart(df.set_index('nombre_juego')['precio'])
+        else:
+            st.write("No hay juegos registrados.")
+    except Exception as e:
+        st.error(f"Error al cargar los datos: {e}")

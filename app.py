@@ -3,7 +3,6 @@ from supabase import create_client
 import pandas as pd
 
 # 1. Configuración de conexión
-# Asegúrate de haber guardado SUPABASE_URL y SUPABASE_KEY en los Secrets de Streamlit Cloud
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 
@@ -60,33 +59,35 @@ else:
                 "registrado_por": st.session_state['user'].email
             }
             try:
-                # Intento de inserción
                 supabase.table("catalogo_juegos").insert(data).execute()
                 st.success("Juego guardado correctamente!")
+                # Limpiamos el caché para que el gráfico se actualice automáticamente
+                st.cache_data.clear()
             except Exception as e:
-                # Si esto falla, aquí verás el error real en pantalla
                 st.error(f"Error al guardar: {e}")
 
     # Área de análisis
     st.divider()
     st.subheader("📊 Área de Análisis")
     
-    if st.button("Actualizar Análisis"):
+    # Botón para forzar actualización manual
+    if st.button("Actualizar Gráfico Ahora"):
         st.cache_data.clear()
 
-    @st.cache_data
+    # Función con caché que se refresca al limpiar st.cache_data
+    @st.cache_data(ttl=60)
     def get_data():
-        # Consultamos los datos
         response = supabase.table("catalogo_juegos").select("*").execute()
         return pd.DataFrame(response.data)
 
     try:
         df = get_data()
-        st.write(f"Última actualización: {pd.Timestamp.now()}")
+        st.write(f"Última actualización: {pd.Timestamp.now().strftime('%H:%M:%S')}")
         
         if not df.empty:
+            # Gráfico de barras es mejor para precios de juegos
+            st.bar_chart(df.set_index('nombre_juego')['precio'])
             st.dataframe(df)
-            st.line_chart(df.set_index('nombre_juego')['precio'])
         else:
             st.write("No hay juegos registrados.")
     except Exception as e:
